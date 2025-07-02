@@ -112,20 +112,28 @@ export function DoorLockDashboard() {
     <>
       <AppSidebar />
       <SidebarInset>
-        <div className="flex h-full flex-col">
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-mr-4" />
-            <LogoHeader withName={false} />
+        <div className="flex h-full flex-col relative">
+          <header className="flex items-center justify-between border-b px-4 py-1 h-fit">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="-mr-2" />
+              <LogoHeader withName={false} />
+            </div>
+
+            <Button
+              onClick={() => setShowAddDevice(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white text-green-500 hover:text-green-500 shadow-sm transition rounded-lg"
+              variant="outline"
+            >
+              <Plus className="h-4 w-4" />
+              Add Device
+            </Button>
           </header>
+
           <main className="flex-1 overflow-auto p-6">
             <div className="mx-auto max-w-6xl space-y-6">
               {/* Device Management */}
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
                 <h2 className="text-2xl font-bold">Your Devices</h2>
-                <Button onClick={() => setShowAddDevice(true)} className="w-full sm:w-auto">
-                  <Plus className="mr-2 h-4 w-4" />
-                  <span className="sm:inline">Add Device</span>
-                </Button>
               </div>
 
               {/* Devices Grid */}

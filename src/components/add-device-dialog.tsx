@@ -1,13 +1,14 @@
 "use client"
 
-import { useState } from "react"
-import { Wifi, Search } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Wifi, Search, BluetoothSearching } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { BleClient } from '@capacitor-community/bluetooth-le';
 
 interface Device {
   name: string
@@ -33,33 +34,75 @@ interface AddDeviceDialogProps {
 export function AddDeviceDialog({ open, onOpenChange, onAddDevice }: AddDeviceDialogProps) {
   const [scanning, setScanning] = useState(false)
   const [deviceName, setDeviceName] = useState("")
-  const [availableDevices] = useState<AvailableDevice[]>([
-    {
-      id: "esp-001",
-      name: "ESP32-Door-Lock-001",
-      ipAddress: "192.168.1.104",
-      signal: 85,
-    },
-    {
-      id: "esp-002",
-      name: "ESP32-Door-Lock-002",
-      ipAddress: "192.168.1.105",
-      signal: 72,
-    },
-    {
-      id: "esp-003",
-      name: "ESP32-Door-Lock-003",
-      ipAddress: "192.168.1.106",
-      signal: 91,
-    },
-  ])
+  const [availableDevices, setAvailableDevices] = useState<AvailableDevice[]>([])
 
-  const handleScan = () => {
+  const hasScannedRef = useRef(false)
+
+  useEffect(() => {
+    if (open && !hasScannedRef.current) {
+      hasScannedRef.current = true
+      handleScan()
+    }
+
+    if (!open) {
+      hasScannedRef.current = false
+    }
+  }, [open])
+
+  const ensureBluetoothOn = async () => {
+    try {
+      await BleClient.initialize();
+
+      const isEnabled = await BleClient.isEnabled();
+      if (!isEnabled) {
+        await BleClient.requestEnable();
+      }
+
+    } catch (err) {
+      console.error("Bluetooth init failed:", err);
+    }
+  };
+
+  const handleScan = async () => {
     setScanning(true)
-    // Simulate scanning
-    setTimeout(() => {
+    setAvailableDevices([])
+
+    try {
+      await ensureBluetoothOn();
+
+      const discovered = new Map<string, AvailableDevice>()
+
+      await BleClient.requestLEScan(
+        {
+          services: []
+        },
+        (result) => {
+          const deviceId = result.device.deviceId
+          const name = result.device.name ?? "Unnamed Device"
+
+          if (!name.startsWith("ESP-N.A.M.E-")) return
+
+          // Avoid duplicates
+          if (!discovered.has(deviceId)) {
+            discovered.set(deviceId, {
+              id: deviceId,
+              name,
+              ipAddress: "", // You won’t get IP from BLE
+              signal: result.rssi ?? 0
+            })
+          }
+        }
+      )
+
+      setTimeout(async () => {
+        await BleClient.stopLEScan()
+        setAvailableDevices(Array.from(discovered.values()))
+        setScanning(false)
+      }, 3000)
+    } catch (error) {
+      console.error("Scan failed", error)
       setScanning(false)
-    }, 2000)
+    }
   }
 
   const handleAddDevice = (availableDevice: AvailableDevice) => {
@@ -84,25 +127,18 @@ export function AddDeviceDialog({ open, onOpenChange, onAddDevice }: AddDeviceDi
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="device-name">Device Name (Optional)</Label>
-            <Input
-              id="device-name"
-              placeholder="e.g., Front Door, Back Door"
-              value={deviceName}
-              onChange={(e) => setDeviceName(e.target.value)}
-            />
-          </div>
-
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium">Available Devices</h3>
             <Button onClick={handleScan} disabled={scanning} variant="outline">
-              <Search className="mr-2 h-4 w-4" />
-              {scanning ? "Scanning..." : "Scan Network"}
+              <BluetoothSearching className="mr-2 h-4 w-4" />
+              {scanning ? "Scanning..." : "Scan Devices"}
             </Button>
           </div>
 
           <div className="space-y-2 max-h-60 overflow-y-auto">
+            {availableDevices.length === 0 && !scanning && (
+              <p className="text-sm text-muted-foreground">No devices found. Click &quot;Scan Network&quot; to search for ESP32 devices.</p>
+            )}
             {availableDevices.map((device) => (
               <Card key={device.id} className="cursor-pointer hover:bg-accent" onClick={() => handleAddDevice(device)}>
                 <CardContent className="p-4">
