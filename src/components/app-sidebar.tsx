@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/sidebar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import Image from "next/image"
+import LogoHeader from "./logo-header"
 
 const menuItems = [
   {
@@ -49,14 +51,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader style={{ paddingTop: "env(safe-area-inset-top)" }}>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-
-          <div className="flex items-center gap-2">
-            <Shield className="h-6 w-6" />
-            <h1 className="text-xl font-semibold">N.A.M.E</h1>
-          </div>
-        </header>
+      <SidebarHeader style={{ paddingTop: "calc(env(safe-area-inset-top) + 10px)" }}>
+        <LogoHeader />
       </SidebarHeader>
 
       <SidebarContent>

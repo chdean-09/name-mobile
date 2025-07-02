@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Lock, Unlock, Shield, Edit2 } from "lucide-react"
+import { Plus, Lock, Unlock, Edit2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AddDeviceDialog } from "@/components/add-device-dialog"
+import LogoHeader from "./logo-header"
 
 interface Device {
   id: string
@@ -114,11 +115,8 @@ export function DoorLockDashboard() {
       <SidebarInset>
         <div className="flex h-full flex-col">
           <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-ml-1" />
-            <div className="flex items-center gap-2">
-              <Shield className="h-6 w-6" />
-              <h1 className="text-xl font-semibold">N.A.M.E</h1>
-            </div>
+            <SidebarTrigger className="-mr-4"/>
+            <LogoHeader withName={false} />
           </header>
 
           <main className="flex-1 overflow-auto p-6">
