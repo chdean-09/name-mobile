@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Lock, Unlock, Edit2 } from "lucide-react"
+import { Plus, Lock, Unlock, Edit2, Clock, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,6 +12,16 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AddDeviceDialog } from "@/components/add-device-dialog"
 import LogoHeader from "./logo-header"
+import { ScheduleDialog } from "./schedule-dialog"
+interface Schedule {
+  id: string
+  lockDay: string
+  lockTime: string
+  unlockDay: string
+  unlockTime: string
+  isActive: boolean
+}
+
 interface Device {
   id: string
   name: string
@@ -19,6 +29,7 @@ interface Device {
   status: "locked" | "unlocked"
   isOnline: boolean
   lastSeen: string
+  schedules: Schedule[]
 }
 
 interface User {
@@ -36,6 +47,16 @@ export function DoorLockDashboard() {
       status: "locked",
       isOnline: true,
       lastSeen: "2 minutes ago",
+      schedules: [
+        {
+          id: "s1",
+          lockDay: "Monday",
+          lockTime: "21:00",
+          unlockDay: "Friday",
+          unlockTime: "07:00",
+          isActive: true,
+        },
+      ],
     },
     {
       id: "2",
@@ -44,6 +65,7 @@ export function DoorLockDashboard() {
       status: "unlocked",
       isOnline: true,
       lastSeen: "1 minute ago",
+      schedules: [],
     },
     {
       id: "3",
@@ -52,6 +74,7 @@ export function DoorLockDashboard() {
       status: "locked",
       isOnline: false,
       lastSeen: "5 minutes ago",
+      schedules: [],
     },
   ])
 
@@ -66,6 +89,8 @@ export function DoorLockDashboard() {
   const [showAddDevice, setShowAddDevice] = useState(false)
   const [editingDevice, setEditingDevice] = useState<string | null>(null)
   const [editingName, setEditingName] = useState("")
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false)
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
 
   const toggleDeviceLock = (deviceId: string) => {
     setDevices(
@@ -75,10 +100,11 @@ export function DoorLockDashboard() {
     )
   }
 
-  const addDevice = (device: Omit<Device, "id">) => {
+  const addDevice = (device: Omit<Device, "id" | "schedules">) => {
     const newDevice = {
       ...device,
       id: (devices.length + 1).toString(),
+      schedules: [],
     }
     setDevices([...devices, newDevice])
   }
@@ -108,12 +134,42 @@ export function DoorLockDashboard() {
     setEditingName("")
   }
 
+  const openScheduleDialog = (deviceId: string) => {
+    setSelectedDeviceId(deviceId)
+    setShowScheduleDialog(true)
+  }
+
+  const addSchedule = (deviceId: string, schedule: Omit<Schedule, "id">) => {
+    const newSchedule = {
+      ...schedule,
+      id: `s${Date.now()}`,
+    }
+    setDevices(
+      devices.map((device) =>
+        device.id === deviceId ? { ...device, schedules: [...device.schedules, newSchedule] } : device,
+      ),
+    )
+  }
+
+  const deleteSchedule = (deviceId: string, scheduleId: string) => {
+    setDevices(
+      devices.map((device) =>
+        device.id === deviceId ? { ...device, schedules: device.schedules.filter((s) => s.id !== scheduleId) } : device,
+      ),
+    )
+  }
+
   return (
     <>
       <AppSidebar />
       <SidebarInset>
-        <div className="flex h-full flex-col relative">
-          <header className="flex items-center justify-between border-b px-4 py-1 h-fit">
+        <div className="flex h-full flex-col">
+          <header
+            className="flex items-center justify-between border-b px-4 py-1 h-fit dark:bg-gradient-to-tr dark:from-slate-900 dark:to-slate-700 bg-gradient-to-br from-slate-100 to-slate-400"
+            style={{
+              paddingTop: "var(--safe-area-inset-top)",
+            }}
+          >
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-mr-2" />
               <LogoHeader withName={false} />
@@ -121,7 +177,7 @@ export function DoorLockDashboard() {
 
             <Button
               onClick={() => setShowAddDevice(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white text-green-500 hover:text-green-500 shadow-sm transition rounded-lg"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white text-blue-400 hover:text-blue-500 shadow-sm transition rounded-lg"
               variant="outline"
             >
               <Plus className="h-4 w-4" />
@@ -140,7 +196,7 @@ export function DoorLockDashboard() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {devices.map((device) => (
                   <Card key={device.id} className="relative">
-                    <CardHeader className="pb-3">
+                    <CardHeader>
                       <div className="flex items-center justify-between">
                         {editingDevice === device.id ? (
                           <div className="flex flex-col gap-2 w-full sm:flex-row sm:items-center sm:justify-between">
@@ -208,7 +264,7 @@ export function DoorLockDashboard() {
                       <p className="text-sm text-muted-foreground">IP: {device.ipAddress}</p>
                       <p className="text-xs text-muted-foreground">Last seen: {device.lastSeen}</p>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="pt-0 space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           {device.status === "locked" ? (
@@ -230,6 +286,30 @@ export function DoorLockDashboard() {
                           />
                         </div>
                       </div>
+                      {/* Schedule Info */}
+                      {device.schedules.length > 0 && (
+                        <div className="mt-3 p-2 rounded-lg bg-white/5 border border-white/10">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Clock className="h-3 w-3 text-blue-500" />
+                            <span className="text-xs text-blue-500">Active Schedule</span>
+                          </div>
+                          {device.schedules.map((schedule) => (
+                            <div key={schedule.id} className="text-xs">
+                              {schedule.lockDay} {schedule.lockTime} → {schedule.unlockDay} {schedule.unlockTime}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Schedule Button */}
+                      <Button
+                        onClick={() => openScheduleDialog(device.id)}
+                        variant="outline"
+                        className="w-full"
+                        disabled={!device.isOnline}
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {device.schedules.length > 0 ? "Edit Schedule" : "Set Schedule"}
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -240,6 +320,15 @@ export function DoorLockDashboard() {
       </SidebarInset>
 
       <AddDeviceDialog open={showAddDevice} onOpenChange={setShowAddDevice} onAddDevice={addDevice} />
+
+      <ScheduleDialog
+        open={showScheduleDialog}
+        onOpenChange={setShowScheduleDialog}
+        deviceId={selectedDeviceId}
+        devices={devices}
+        onAddSchedule={addSchedule}
+        onDeleteSchedule={deleteSchedule}
+      />
     </>
   )
 }
