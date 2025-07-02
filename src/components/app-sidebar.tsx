@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Image from "next/image"
 import LogoHeader from "./logo-header"
+import '@capacitor-community/safe-area';
 
 const menuItems = [
   {
@@ -51,7 +52,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader style={{ paddingTop: "calc(env(safe-area-inset-top) + 10px)" }}>
+      <SidebarHeader style={{ paddingTop: "calc(var(--safe-area-inset-top) + 10px)" }}>
         <LogoHeader />
       </SidebarHeader>
 

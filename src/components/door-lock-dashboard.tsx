@@ -12,7 +12,6 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AddDeviceDialog } from "@/components/add-device-dialog"
 import LogoHeader from "./logo-header"
-
 interface Device {
   id: string
   name: string
@@ -115,10 +114,9 @@ export function DoorLockDashboard() {
       <SidebarInset>
         <div className="flex h-full flex-col">
           <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-mr-4"/>
+            <SidebarTrigger className="-mr-4" />
             <LogoHeader withName={false} />
           </header>
-
           <main className="flex-1 overflow-auto p-6">
             <div className="mx-auto max-w-6xl space-y-6">
               {/* Device Management */}

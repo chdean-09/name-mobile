@@ -8,6 +8,17 @@ const config: CapacitorConfig = {
     "url": "http://192.168.1.11:3000",
     "cleartext": true
   },
+  plugins: {
+    SafeArea: {
+      enabled: false,
+      customColorsForSystemBars: true,
+      statusBarColor: '#ffffff',
+      statusBarContent: 'dark',
+      navigationBarColor: '#000000',
+      navigationBarContent: 'dark',
+      offset: 0,
+    },
+  },
 };
 
 export default config;

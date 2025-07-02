@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css";
+import SafeAreaSetup from "@/components/safe-area-setup";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,7 +35,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{
-          paddingTop: "env(safe-area-inset-top)",
+          paddingTop: "var(--safe-area-inset-top)",
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
@@ -44,6 +45,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <SafeAreaSetup />
           {children}
         </ThemeProvider>
       </body>
