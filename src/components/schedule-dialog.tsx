@@ -92,7 +92,7 @@ export function ScheduleDialog({
         if (!open) resetForm()
       }}
     >
-      <DialogContent className="w-full max-h-[90vh] overflow-y-auto bg-white/10 backdrop-blur-xl border border-white/20 text-slate-200 ">
+      <DialogContent className="w-full max-h-[90vh] overflow-y-auto ">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-blue-300" />

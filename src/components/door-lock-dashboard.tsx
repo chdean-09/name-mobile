@@ -165,7 +165,7 @@ export function DoorLockDashboard() {
       <SidebarInset>
         <div className="flex h-full flex-col">
           <header
-            className="flex items-center justify-between border-b px-4 py-1 h-fit dark:bg-gradient-to-tr dark:from-slate-900 dark:to-slate-700 bg-gradient-to-br from-slate-100 to-slate-400"
+            className="flex items-center justify-between border-b px-4 py-1 h-fit dark:bg-gradient-to-br dark:from-slate-900 dark:to-slate-700 bg-gradient-to-bl from-slate-50 to-slate-400"
             style={{
               paddingTop: "var(--safe-area-inset-top)",
             }}
@@ -177,7 +177,7 @@ export function DoorLockDashboard() {
 
             <Button
               onClick={() => setShowAddDevice(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white text-blue-400 hover:text-blue-500 shadow-sm transition rounded-lg"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-400 dark:text-blue-300 hover:text-blue-500 shadow-sm transition rounded-lg"
               variant="outline"
             >
               <Plus className="h-4 w-4" />

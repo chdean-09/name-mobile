@@ -118,7 +118,7 @@ export function AddDeviceDialog({ open, onOpenChange, onAddDevice }: AddDeviceDi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full h-fit overflow-y-hidden bg-white/10 backdrop-blur-xl border border-white/20 text-slate-200">
+      <DialogContent className="w-full h-fit overflow-y-hidden">
         <DialogHeader>
           <DialogTitle>Add New Device</DialogTitle>
           <DialogDescription className="text-blue-200">Scan for available ESP32 door lock devices on your network.</DialogDescription>
