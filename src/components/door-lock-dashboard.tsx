@@ -1,130 +1,71 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Lock, Unlock, Edit2, Clock, Calendar } from "lucide-react"
+import { Plus, Lock, Unlock, Edit2, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AddDeviceDialog } from "@/components/add-device-dialog"
+import { ConnectionStatusIndicator } from "@/components/connection-status"
 import LogoHeader from "./logo-header"
-import { ScheduleDialog } from "./schedule-dialog"
-interface Schedule {
-  id: string
-  lockDay: string
-  lockTime: string
-  unlockDay: string
-  unlockTime: string
-  isActive: boolean
-}
-
-interface Device {
-  id: string
-  name: string
-  ipAddress: string
-  status: "locked" | "unlocked"
-  isOnline: boolean
-  lastSeen: string
-  schedules: Schedule[]
-}
-
-interface User {
-  id: string
-  email: string
-  deviceAccess: string[]
-}
+import { useDeviceControl } from "@/hooks/use-device-control"
+import { DeviceInfo, getDeviceService } from "@/services/device-service"
+import { configService } from "@/services/config"
+import { httpService } from "@/services/http"
+import { webSocketService } from "@/services/websocket"
 
 export function DoorLockDashboard() {
-  const [devices, setDevices] = useState<Device[]>([
-    {
-      id: "1",
-      name: "Front Door",
-      ipAddress: "192.168.1.101",
-      status: "locked",
-      isOnline: true,
-      lastSeen: "2 minutes ago",
-      schedules: [
-        {
-          id: "s1",
-          lockDay: "Monday",
-          lockTime: "21:00",
-          unlockDay: "Friday",
-          unlockTime: "07:00",
-          isActive: true,
-        },
-      ],
-    },
-    {
-      id: "2",
-      name: "Back Door",
-      ipAddress: "192.168.1.102",
-      status: "unlocked",
-      isOnline: true,
-      lastSeen: "1 minute ago",
-      schedules: [],
-    },
-    {
-      id: "3",
-      name: "Garage Door",
-      ipAddress: "192.168.1.103",
-      status: "locked",
-      isOnline: false,
-      lastSeen: "5 minutes ago",
-      schedules: [],
-    },
-  ])
-
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: "1",
-      email: "john@example.com",
-      deviceAccess: ["1", "2"],
-    },
-  ])
+  // Use device control hook with a user ID (you might want to get this from auth)
+  const userId = "user-123"; // TODO: Get from authentication
+  const {
+    devices,
+    connectionStatus,
+    isLoading,
+    error,
+    toggleDeviceLock,
+    toggleBuzzer,
+    addDevice,
+    clearError,
+    retryConnection,
+  } = useDeviceControl(userId);
 
   const [showAddDevice, setShowAddDevice] = useState(false)
   const [editingDevice, setEditingDevice] = useState<string | null>(null)
   const [editingName, setEditingName] = useState("")
-  const [showScheduleDialog, setShowScheduleDialog] = useState(false)
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
+  const [showServerConfig, setShowServerConfig] = useState(false)
+  const [serverIP, setServerIP] = useState('192.168.1.100') // Default IP for ESP32
 
-  const toggleDeviceLock = (deviceId: string) => {
-    setDevices(
-      devices.map((device) =>
-        device.id === deviceId ? { ...device, status: device.status === "locked" ? "unlocked" : "locked" } : device,
-      ),
-    )
+  const handleToggleDeviceLock = async (deviceId: string) => {
+    console.log(`Toggling lock for device ${deviceId}`);
+    await toggleDeviceLock(deviceId);
   }
 
-  const addDevice = (device: Omit<Device, "id" | "schedules">) => {
-    const newDevice = {
-      ...device,
-      id: (devices.length + 1).toString(),
-      schedules: [],
-    }
-    setDevices([...devices, newDevice])
-  }
-
-  const addUser = (email: string, deviceAccess: string[]) => {
-    const newUser = {
-      id: (users.length + 1).toString(),
-      email,
-      deviceAccess,
-    }
-    setUsers([...users, newUser])
+  const handleAddDevice = (device: { name: string; ipAddress: string; status: "locked" | "unlocked"; isOnline: boolean; lastSeen: string }) => {
+    addDevice({
+      name: device.name,
+      ipAddress: device.ipAddress,
+      status: device.status,
+      isOnline: device.isOnline,
+      lastSeen: device.lastSeen,
+      buzzer: 'off', // Default buzzer state
+    });
   }
 
   const updateDeviceName = (deviceId: string, newName: string) => {
-    setDevices(devices.map((device) => (device.id === deviceId ? { ...device, name: newName } : device)))
+    // TODO: Implement device name update in DeviceService
+    // For now, we'll just close the editing state
+    console.log(`Updating device ${deviceId} name to ${newName}`)
     setEditingDevice(null)
     setEditingName("")
   }
 
-  const startEditing = (device: Device) => {
+  const startEditing = (device: DeviceInfo) => {
     setEditingDevice(device.id)
     setEditingName(device.name)
   }
@@ -134,29 +75,49 @@ export function DoorLockDashboard() {
     setEditingName("")
   }
 
-  const openScheduleDialog = (deviceId: string) => {
-    setSelectedDeviceId(deviceId)
-    setShowScheduleDialog(true)
+  const updateServerConfig = () => {
+    const newWebSocketUrl = `ws://${serverIP}:8000`;
+    const newHttpUrl = `http://${serverIP}:8000`;
+    
+    console.log(`Updating server config to: ${newHttpUrl}`);
+    
+    // Update config service
+    configService.updateConfig({
+      websocketUrl: newWebSocketUrl,
+      httpBaseUrl: newHttpUrl,
+    });
+    
+    // Update HTTP service URL  
+    httpService.updateBaseUrl(newHttpUrl);
+    
+    // Update WebSocket service URL
+    webSocketService.updateUrl(newWebSocketUrl);
+    
+    setShowServerConfig(false);
+    
+    // Trigger a retry connection
+    retryConnection();
   }
 
-  const addSchedule = (deviceId: string, schedule: Omit<Schedule, "id">) => {
-    const newSchedule = {
-      ...schedule,
-      id: `s${Date.now()}`,
+  // Debug functions for testing WebSocket commands
+  const testWebSocketCommands = async () => {
+    console.log('Testing WebSocket commands...');
+    const deviceService = getDeviceService(userId);
+    if (devices.length > 0) {
+      await deviceService.debugWebSocketCommands(devices[0].id);
     }
-    setDevices(
-      devices.map((device) =>
-        device.id === deviceId ? { ...device, schedules: [...device.schedules, newSchedule] } : device,
-      ),
-    )
   }
 
-  const deleteSchedule = (deviceId: string, scheduleId: string) => {
-    setDevices(
-      devices.map((device) =>
-        device.id === deviceId ? { ...device, schedules: device.schedules.filter((s) => s.id !== scheduleId) } : device,
-      ),
-    )
+  const testESP32Commands = async () => {
+    console.log('Testing ESP32-specific commands...');
+    const deviceService = getDeviceService(userId);
+    await deviceService.testESP32Commands();
+  }
+
+  const sendRawCommand = async (event: string, data: Record<string, unknown>) => {
+    console.log(`Sending raw command: ${event}`, data);
+    const deviceService = getDeviceService(userId);
+    await deviceService.sendRawMessage(event, data);
   }
 
   return (
@@ -173,24 +134,72 @@ export function DoorLockDashboard() {
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-mr-2" />
               <LogoHeader withName={false} />
+              <ConnectionStatusIndicator status={connectionStatus} />
             </div>
 
-            <Button
-              onClick={() => setShowAddDevice(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-400 dark:text-blue-300 hover:text-blue-500 shadow-sm transition rounded-lg"
-              variant="outline"
-            >
-              <Plus className="h-4 w-4" />
-              Add Device
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setShowServerConfig(true)}
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-2 text-blue-400 dark:text-blue-300 hover:text-blue-500"
+              >
+                <Settings className="h-4 w-4" />
+                Server
+              </Button>
+              <Button
+                onClick={() => setShowAddDevice(true)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-400 dark:text-blue-300 hover:text-blue-500 shadow-sm transition rounded-lg"
+                variant="outline"
+              >
+                <Plus className="h-4 w-4" />
+                Add Device
+              </Button>
+            </div>
           </header>
 
           <main className="flex-1 overflow-auto p-6">
             <div className="mx-auto max-w-6xl space-y-6">
               {/* Device Management */}
-              <div>
+              <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">Your Devices</h2>
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 text-sm max-w-md">
+                    <div className="font-medium mb-2">Connection Issue</div>
+                    <div className="mb-3">{error}</div>
+                    <div className="flex gap-2">
+                      {connectionStatus === 'disconnected' || connectionStatus === 'error' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            console.log('Retrying connection...');
+                            await retryConnection();
+                          }}
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                        >
+                          Retry Connection
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearError}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Loading indicator */}
+              {isLoading && (
+                <div className="text-center text-muted-foreground">
+                  Loading...
+                </div>
+              )}
 
               {/* Devices Grid */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -265,6 +274,7 @@ export function DoorLockDashboard() {
                       <p className="text-xs text-muted-foreground">Last seen: {device.lastSeen}</p>
                     </CardHeader>
                     <CardContent className="pt-0 space-y-4">
+                      {/* Door Lock Control */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           {device.status === "locked" ? (
@@ -281,54 +291,209 @@ export function DoorLockDashboard() {
                           <Switch
                             id={`toggle-${device.id}`}
                             checked={device.status === "unlocked"}
-                            onCheckedChange={() => toggleDeviceLock(device.id)}
-                            disabled={!device.isOnline}
+                            onCheckedChange={() => handleToggleDeviceLock(device.id)}
+                            disabled={!device.isOnline || isLoading}
                           />
                         </div>
                       </div>
-                      {/* Schedule Info */}
-                      {device.schedules.length > 0 && (
-                        <div className="mt-3 p-2 rounded-lg bg-white/5 border border-white/10">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Clock className="h-3 w-3 text-blue-500" />
-                            <span className="text-xs text-blue-500">Active Schedule</span>
-                          </div>
-                          {device.schedules.map((schedule) => (
-                            <div key={schedule.id} className="text-xs">
-                              {schedule.lockDay} {schedule.lockTime} → {schedule.unlockDay} {schedule.unlockTime}
-                            </div>
-                          ))}
+
+                      {/* Buzzer Control */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full ${device.buzzer === "on" ? "bg-yellow-500" : "bg-gray-400"}`} />
+                          <span className="font-medium">Buzzer {device.buzzer === "on" ? "On" : "Off"}</span>
                         </div>
-                      )}
-                      {/* Schedule Button */}
-                      <Button
-                        onClick={() => openScheduleDialog(device.id)}
-                        variant="outline"
-                        className="w-full"
-                        disabled={!device.isOnline}
-                      >
-                        <Calendar className="mr-2 h-4 w-4" />
-                        {device.schedules.length > 0 ? "Edit Schedule" : "Set Schedule"}
-                      </Button>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`buzzer-${device.id}`} className="text-sm">
+                            {device.buzzer === "off" ? "Turn On" : "Turn Off"}
+                          </Label>
+                          <Switch
+                            id={`buzzer-${device.id}`}
+                            checked={device.buzzer === "on"}
+                            onCheckedChange={() => toggleBuzzer(device.id)}
+                            disabled={!device.isOnline || isLoading}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Door and buzzer status display */}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="flex items-center gap-1">
+                          <div className={`w-2 h-2 rounded-full ${device.status === 'locked' ? 'bg-red-500' : 'bg-green-500'}`} />
+                          <span>Door: {device.status === 'locked' ? 'Locked' : 'Unlocked'}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className={`w-2 h-2 rounded-full ${device.buzzer === 'on' ? 'bg-yellow-500' : 'bg-gray-400'}`} />
+                          <span>Buzzer: {device.buzzer === 'on' ? 'On' : 'Off'}</span>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
+
+              {/* Debug Controls - only show when connected and devices exist */}
+              {connectionStatus === 'connected' && devices.length > 0 && (
+                <div className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Debug Controls</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="text-sm text-muted-foreground">
+                          Use these buttons to test different WebSocket command formats with your ESP32 backend.
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={testWebSocketCommands}
+                            disabled={isLoading}
+                          >
+                            Test WebSocket Commands
+                          </Button>
+                          
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={testESP32Commands}
+                            disabled={isLoading}
+                          >
+                            Test ESP32 Commands
+                          </Button>
+                          
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => sendRawCommand('unlock', {})}
+                            disabled={isLoading}
+                          >
+                            Send Raw &quot;unlock&quot;
+                          </Button>
+                          
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => sendRawCommand('lock', {})}
+                            disabled={isLoading}
+                          >
+                            Send Raw &quot;lock&quot;
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => sendRawCommand('door', { action: 'unlock' })}
+                            disabled={isLoading}
+                          >
+                            Send &quot;door&quot; Event
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => sendRawCommand('cmd', { door: 'unlock' })}
+                            disabled={isLoading}
+                          >
+                            Send &quot;cmd&quot; Event
+                          </Button>
+                        </div>
+                        
+                        <div className="text-xs text-muted-foreground">
+                          Watch the browser console for detailed logs of sent messages and backend responses.
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* No devices message */}
+              {devices.length === 0 && !isLoading && (
+                <div className="text-center text-muted-foreground py-8">
+                  {connectionStatus === 'connected' ? (
+                    <>
+                      <p className="mb-4">No devices found. Add your first ESP32 door lock to get started.</p>
+                      <Button onClick={() => setShowAddDevice(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Device
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="max-w-md mx-auto">
+                      <div className="mb-4">
+                        <p className="text-lg font-medium text-muted-foreground mb-2">Connection Required</p>
+                        <p className="text-sm">
+                          {connectionStatus === 'disconnected' || connectionStatus === 'error' 
+                            ? 'Cannot connect to your ESP32 server. Make sure it\'s running and click Server button to set the correct IP address.'
+                            : connectionStatus === 'connecting' 
+                            ? 'Connecting to ESP32 server...'
+                            : 'Checking connection...'}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 justify-center">
+                        <Button 
+                          onClick={async () => await retryConnection()}
+                          disabled={connectionStatus === 'connecting'}
+                        >
+                          {connectionStatus === 'connecting' ? 'Connecting...' : 'Retry Connection'}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setShowServerConfig(true)}
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Server Config
+                        </Button>
+                        <Button variant="outline" onClick={() => setShowAddDevice(true)}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Device (HTTP Only)
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </main>
         </div>
       </SidebarInset>
 
-      <AddDeviceDialog open={showAddDevice} onOpenChange={setShowAddDevice} onAddDevice={addDevice} />
-
-      <ScheduleDialog
-        open={showScheduleDialog}
-        onOpenChange={setShowScheduleDialog}
-        deviceId={selectedDeviceId}
-        devices={devices}
-        onAddSchedule={addSchedule}
-        onDeleteSchedule={deleteSchedule}
-      />
+      <AddDeviceDialog open={showAddDevice} onOpenChange={setShowAddDevice} onAddDevice={handleAddDevice} />
+      
+      {/* Server Configuration Dialog */}
+      <Dialog open={showServerConfig} onOpenChange={setShowServerConfig}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>ESP32 Server Configuration</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="server-ip">ESP32 Server IP Address</Label>
+              <Input
+                id="server-ip"
+                value={serverIP}
+                onChange={(e) => setServerIP(e.target.value)}
+                placeholder="e.g., 192.168.1.100"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Enter the IP address of your ESP32 device. Find it in your router settings or ESP32 serial monitor.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={updateServerConfig} className="flex-1">
+                Update & Connect
+              </Button>
+              <Button variant="outline" onClick={() => setShowServerConfig(false)} className="flex-1">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
