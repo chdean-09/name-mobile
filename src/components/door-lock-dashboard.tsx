@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Lock, Unlock, Edit2, Clock, Calendar } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Plus, Lock, Unlock, Edit2, Clock, Calendar, DoorOpen, DoorClosed } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,6 +13,7 @@ import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AddDeviceDialog } from "@/components/add-device-dialog"
 import LogoHeader from "./logo-header"
 import { ScheduleDialog } from "./schedule-dialog"
+import { useDeviceWebSocket } from "./websocket"
 interface Schedule {
   id: string
   lockDay: string
@@ -39,6 +40,7 @@ interface User {
 }
 
 export function DoorLockDashboard() {
+  const socketRef = useDeviceWebSocket("192.168.209.221")
   const [devices, setDevices] = useState<Device[]>([
     {
       id: "1",
@@ -58,24 +60,6 @@ export function DoorLockDashboard() {
         },
       ],
     },
-    {
-      id: "2",
-      name: "Back Door",
-      ipAddress: "192.168.1.102",
-      status: "unlocked",
-      isOnline: true,
-      lastSeen: "1 minute ago",
-      schedules: [],
-    },
-    {
-      id: "3",
-      name: "Garage Door",
-      ipAddress: "192.168.1.103",
-      status: "locked",
-      isOnline: false,
-      lastSeen: "5 minutes ago",
-      schedules: [],
-    },
   ])
 
   const [users, setUsers] = useState<User[]>([
@@ -91,13 +75,23 @@ export function DoorLockDashboard() {
   const [editingName, setEditingName] = useState("")
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
+  const [lockStates, setLockStates] = useState<Record<string, boolean>>({})
 
-  const toggleDeviceLock = (deviceId: string) => {
-    setDevices(
-      devices.map((device) =>
-        device.id === deviceId ? { ...device, status: device.status === "locked" ? "unlocked" : "locked" } : device,
-      ),
-    )
+
+  useEffect(() => {
+    if (socketRef.data.lock) {
+      setLockStates((prev) => ({
+        ...prev,
+        // assume device "1" for now — you’ll need to map per IP/device.id if supporting multiple
+        "1": socketRef.data.lock === "locked",
+      }))
+    }
+  }, [socketRef.data.lock])
+
+
+  const toggleDeviceLock = (deviceId: string, newState: boolean) => {
+    socketRef.send({ command: newState ? "lock" : "unlock" })
+    setLockStates((prev) => ({ ...prev, [deviceId]: newState }))
   }
 
   const addDevice = (device: Omit<Device, "id" | "schedules">) => {
@@ -195,8 +189,12 @@ export function DoorLockDashboard() {
               {/* Devices Grid */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {devices.map((device) => (
-                  <Card key={device.id} className="relative">
-                    <CardHeader>
+                  <Card
+                    key={device.id}
+                    className={`relative border transition-all duration-300 ${socketRef.buzzer ? "border-red-500 ring-2 ring-red-300 bg-red-200" : ""
+                      }`}
+                  >
+                    <CardHeader className="-mb-5">
                       <div className="flex items-center justify-between">
                         {editingDevice === device.id ? (
                           <div className="flex flex-col gap-2 w-full sm:flex-row sm:items-center sm:justify-between">
@@ -255,37 +253,58 @@ export function DoorLockDashboard() {
                           </div>
                         )}
                         <Badge
-                          variant={device.isOnline ? "default" : "secondary"}
-                          className={device.isOnline ? "bg-green-500" : ""}
+                          variant={socketRef.isConnected ? "default" : "secondary"}
+                          className={socketRef.isConnected ? "bg-green-500" : ""}
                         >
-                          {device.isOnline ? "Online" : "Offline"}
+                          {socketRef.isConnected ? "Online" : "Offline"}
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">IP: {device.ipAddress}</p>
-                      <p className="text-xs text-muted-foreground">Last seen: {device.lastSeen}</p>
                     </CardHeader>
                     <CardContent className="pt-0 space-y-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-muted-foreground tracking-wide uppercase">Device Status</h3>
+                      </div>
+
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          {device.status === "locked" ? (
+                          {socketRef.data.sensor === "open" ? (
+                            <DoorOpen className="h-5 w-5 text-yellow-500" />
+                          ) : (
+                            <DoorClosed className="h-5 w-5" />
+                          )}
+                          <span className="font-medium capitalize text-sm">
+                            {socketRef.data.sensor === "open" ? "Door Open" : "Door Closed"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {socketRef.data.lock === "locked" ? (
                             <Lock className="h-5 w-5 text-red-500" />
                           ) : (
                             <Unlock className="h-5 w-5 text-green-500" />
                           )}
-                          <span className="font-medium capitalize">{device.status}</span>
+                          <span className="font-medium capitalize text-sm">
+                            {socketRef.data.lock === "locked" ? "Locked" : "Unlocked"}
+                          </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Label htmlFor={`toggle-${device.id}`} className="text-sm">
-                            {device.status === "locked" ? "Unlock" : "Lock"}
+                          <Label
+                            htmlFor={`toggle-${device.id}`}
+                            className="text-sm transition-colors duration-200 text-muted-foreground"
+                          >
+                            {lockStates[device.id] ? "Unlock" : "Lock"}
                           </Label>
                           <Switch
                             id={`toggle-${device.id}`}
-                            checked={device.status === "unlocked"}
-                            onCheckedChange={() => toggleDeviceLock(device.id)}
+                            checked={!!lockStates[device.id]}
+                            onCheckedChange={(e) => toggleDeviceLock(device.id, e)}
                             disabled={!device.isOnline}
                           />
                         </div>
                       </div>
+
                       {/* Schedule Info */}
                       {device.schedules.length > 0 && (
                         <div className="mt-3 p-2 rounded-lg bg-white/5 border border-white/10">
