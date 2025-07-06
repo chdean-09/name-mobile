@@ -33,14 +33,8 @@ interface Device {
   schedules: Schedule[]
 }
 
-interface User {
-  id: string
-  email: string
-  deviceAccess: string[]
-}
-
 export function DoorLockDashboard() {
-  const socketRef = useDeviceWebSocket("192.168.209.221")
+  const socketRef = useDeviceWebSocket()
   const [devices, setDevices] = useState<Device[]>([
     {
       id: "1",
@@ -62,20 +56,13 @@ export function DoorLockDashboard() {
     },
   ])
 
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: "1",
-      email: "john@example.com",
-      deviceAccess: ["1", "2"],
-    },
-  ])
-
   const [showAddDevice, setShowAddDevice] = useState(false)
   const [editingDevice, setEditingDevice] = useState<string | null>(null)
   const [editingName, setEditingName] = useState("")
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
   const [lockStates, setLockStates] = useState<Record<string, boolean>>({})
+  const [lockChanging, setLockChanging] = useState<Record<string, boolean>>({});
 
 
   useEffect(() => {
@@ -90,8 +77,26 @@ export function DoorLockDashboard() {
 
 
   const toggleDeviceLock = (deviceId: string, newState: boolean) => {
-    socketRef.send({ command: newState ? "lock" : "unlock" })
-    setLockStates((prev) => ({ ...prev, [deviceId]: newState }))
+    // Show spinner/disable switch
+    setLockChanging((prev) => ({ ...prev, [deviceId]: true }));
+
+    // Optimistically update UI
+    setLockStates((prev) => ({ ...prev, [deviceId]: newState }));
+
+    // Send command
+    socketRef.send({ command: newState ? "lock" : "unlock" });
+
+    // Wait for confirmation from ESP
+    setTimeout(() => {
+      const actualLockState = socketRef.data.lock === "locked";
+
+      if (actualLockState !== newState) {
+        console.warn("⛔ Lock state mismatch. Reverting toggle.");
+        setLockStates((prev) => ({ ...prev, [deviceId]: actualLockState }));
+      }
+
+      setLockChanging((prev) => ({ ...prev, [deviceId]: false }));
+    }, 1000);
   }
 
   const addDevice = (device: Omit<Device, "id" | "schedules">) => {
@@ -101,15 +106,6 @@ export function DoorLockDashboard() {
       schedules: [],
     }
     setDevices([...devices, newDevice])
-  }
-
-  const addUser = (email: string, deviceAccess: string[]) => {
-    const newUser = {
-      id: (users.length + 1).toString(),
-      email,
-      deviceAccess,
-    }
-    setUsers([...users, newUser])
   }
 
   const updateDeviceName = (deviceId: string, newName: string) => {
@@ -253,10 +249,10 @@ export function DoorLockDashboard() {
                           </div>
                         )}
                         <Badge
-                          variant={socketRef.isConnected ? "default" : "secondary"}
-                          className={socketRef.isConnected ? "bg-green-500" : ""}
+                          variant={socketRef.deviceStatuses["esp32-name-123"] ? "default" : "secondary"}
+                          className={socketRef.deviceStatuses["esp32-name-123"] ? "bg-green-500" : ""}
                         >
-                          {socketRef.isConnected ? "Online" : "Offline"}
+                          {socketRef.deviceStatuses["esp32-name-123"] ? "Online" : "Offline"}
                         </Badge>
                       </div>
                     </CardHeader>
@@ -300,7 +296,7 @@ export function DoorLockDashboard() {
                             id={`toggle-${device.id}`}
                             checked={!!lockStates[device.id]}
                             onCheckedChange={(e) => toggleDeviceLock(device.id, e)}
-                            disabled={!device.isOnline}
+                            disabled={!device.isOnline || lockChanging[device.id]}
                           />
                         </div>
                       </div>
