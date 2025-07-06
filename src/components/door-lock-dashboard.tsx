@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Plus, Lock, Unlock, Edit2, Clock, Calendar, DoorOpen, DoorClosed } from "lucide-react"
+import { useState } from "react"
+import { Plus, Lock, Unlock, Edit2, Clock, DoorOpen, DoorClosed, MoreVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,8 +12,19 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AddDeviceDialog } from "@/components/add-device-dialog"
 import LogoHeader from "./logo-header"
-import { ScheduleDialog } from "./schedule-dialog"
+// import { ScheduleDialog } from "./schedule-dialog"
 import { useDeviceWebSocket } from "./websocket"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu"
+
+import useSWR from 'swr'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog"
+import { DialogClose } from "@radix-ui/react-dialog"
+
 interface Schedule {
   id: string
   lockDay: string
@@ -26,54 +37,26 @@ interface Schedule {
 interface Device {
   id: string
   name: string
-  ipAddress: string
   status: "locked" | "unlocked"
   isOnline: boolean
-  lastSeen: string
   schedules: Schedule[]
 }
 
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
 export function DoorLockDashboard() {
   const socketRef = useDeviceWebSocket()
-  const [devices, setDevices] = useState<Device[]>([
-    {
-      id: "1",
-      name: "Front Door",
-      ipAddress: "192.168.1.101",
-      status: "locked",
-      isOnline: true,
-      lastSeen: "2 minutes ago",
-      schedules: [
-        {
-          id: "s1",
-          lockDay: "Monday",
-          lockTime: "21:00",
-          unlockDay: "Friday",
-          unlockTime: "07:00",
-          isActive: true,
-        },
-      ],
-    },
-  ])
+  const { data, error, isLoading } = useSWR<Device[]>(`https://name-server-production.up.railway.app/device-list`, fetcher, {refreshInterval: 500})
+
+  console.log("data from server:", data)
 
   const [showAddDevice, setShowAddDevice] = useState(false)
   const [editingDevice, setEditingDevice] = useState<string | null>(null)
   const [editingName, setEditingName] = useState("")
-  const [showScheduleDialog, setShowScheduleDialog] = useState(false)
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
+  // const [showScheduleDialog, setShowScheduleDialog] = useState(false)
+  // const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
   const [lockStates, setLockStates] = useState<Record<string, boolean>>({})
   const [lockChanging, setLockChanging] = useState<Record<string, boolean>>({});
-
-
-  useEffect(() => {
-    if (socketRef.data.lock) {
-      setLockStates((prev) => ({
-        ...prev,
-        // assume device "1" for now — you’ll need to map per IP/device.id if supporting multiple
-        "1": socketRef.data.lock === "locked",
-      }))
-    }
-  }, [socketRef.data.lock])
 
 
   const toggleDeviceLock = (deviceId: string, newState: boolean) => {
@@ -84,11 +67,11 @@ export function DoorLockDashboard() {
     setLockStates((prev) => ({ ...prev, [deviceId]: newState }));
 
     // Send command
-    socketRef.send({ command: newState ? "lock" : "unlock" });
+    socketRef.send(deviceId, newState ? "lock" : "unlock");
 
     // Wait for confirmation from ESP
     setTimeout(() => {
-      const actualLockState = socketRef.data.lock === "locked";
+      const actualLockState = socketRef.deviceStates[deviceId].lock === "locked";
 
       if (actualLockState !== newState) {
         console.warn("⛔ Lock state mismatch. Reverting toggle.");
@@ -99,17 +82,14 @@ export function DoorLockDashboard() {
     }, 1000);
   }
 
-  const addDevice = (device: Omit<Device, "id" | "schedules">) => {
-    const newDevice = {
-      ...device,
-      id: (devices.length + 1).toString(),
-      schedules: [],
-    }
-    setDevices([...devices, newDevice])
-  }
-
-  const updateDeviceName = (deviceId: string, newName: string) => {
-    setDevices(devices.map((device) => (device.id === deviceId ? { ...device, name: newName } : device)))
+  const updateDeviceName = async (deviceId: string, newName: string) => {
+    await fetch(`https://name-server-production.up.railway.app/device-list/${deviceId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ newName }),
+    })
     setEditingDevice(null)
     setEditingName("")
   }
@@ -124,30 +104,38 @@ export function DoorLockDashboard() {
     setEditingName("")
   }
 
-  const openScheduleDialog = (deviceId: string) => {
-    setSelectedDeviceId(deviceId)
-    setShowScheduleDialog(true)
+  const handleDelete = async (deviceId: string) => {
+    await fetch(`https://name-server-production.up.railway.app/device-list/${deviceId}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
   }
 
-  const addSchedule = (deviceId: string, schedule: Omit<Schedule, "id">) => {
-    const newSchedule = {
-      ...schedule,
-      id: `s${Date.now()}`,
-    }
-    setDevices(
-      devices.map((device) =>
-        device.id === deviceId ? { ...device, schedules: [...device.schedules, newSchedule] } : device,
-      ),
-    )
-  }
+  // const openScheduleDialog = (deviceId: string) => {
+  //   setSelectedDeviceId(deviceId)
+  //   setShowScheduleDialog(true)
+  // }
 
-  const deleteSchedule = (deviceId: string, scheduleId: string) => {
-    setDevices(
-      devices.map((device) =>
-        device.id === deviceId ? { ...device, schedules: device.schedules.filter((s) => s.id !== scheduleId) } : device,
-      ),
-    )
-  }
+  // const addSchedule = async (deviceId: string, schedule: Omit<Schedule, "id">) => {
+  //   await fetch(`https://name-server-production.up.railway.app/schedule`, {
+  //     method: "POST",
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //     },
+  //     body: JSON.stringify({ deviceId, schedule }),
+  //   })
+  // }
+
+  // const deleteSchedule = async (scheduleId: string) => {
+  //   await fetch(`https://name-server-production.up.railway.app/schedule/${scheduleId}`, {
+  //     method: "DELETE",
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //     },
+  //   })
+  // }
 
   return (
     <>
@@ -184,10 +172,17 @@ export function DoorLockDashboard() {
 
               {/* Devices Grid */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {devices.map((device) => (
+                {error && <div className="text-red-500">Failed to load devices</div>}
+                {isLoading && <div className="text-gray-500">Loading devices...</div>}
+                {data?.length === 0 && (
+                  <div className="text-center text-muted-foreground">
+                    No devices registered yet.
+                  </div>
+                )}
+                {data && data.map((device) => (
                   <Card
                     key={device.id}
-                    className={`relative border transition-all duration-300 ${socketRef.buzzer ? "border-red-500 ring-2 ring-red-300 bg-red-200" : ""
+                    className={`relative border transition-all duration-300 ${socketRef.deviceStates[device.id]?.buzzer ? "border-red-500 ring-2 ring-red-300 bg-red-200" : ""
                       }`}
                   >
                     <CardHeader className="-mb-5">
@@ -248,12 +243,51 @@ export function DoorLockDashboard() {
                             </Button>
                           </div>
                         )}
-                        <Badge
-                          variant={socketRef.deviceStatuses["esp32-name-123"] ? "default" : "secondary"}
-                          className={socketRef.deviceStatuses["esp32-name-123"] ? "bg-green-500" : ""}
-                        >
-                          {socketRef.deviceStatuses["esp32-name-123"] ? "Online" : "Offline"}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={socketRef.deviceStatuses[device.id] ? "default" : "secondary"}
+                            className={socketRef.deviceStatuses[device.id] ? "bg-green-500" : ""}
+                          >
+                            {socketRef.deviceStatuses[device.id] ? "Online" : "Offline"}
+                          </Badge>
+
+                          <Dialog>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 p-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DialogTrigger>
+                                  <DropdownMenuItem
+                                    className="text-red-500 focus:text-red-600"
+                                  >
+                                    Unpair Device
+                                  </DropdownMenuItem>
+                                </DialogTrigger>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Are you absolutely sure?</DialogTitle>
+                                <DialogDescription>
+                                  You will be unpaired with this device.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <DialogFooter>
+                                <DialogClose asChild>
+                                  <Button
+                                    variant={"destructive"}
+                                    onClick={() => handleDelete(device.id)}
+                                  >
+                                    Confirm
+                                  </Button>
+                                </DialogClose>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0 space-y-4">
@@ -263,26 +297,26 @@ export function DoorLockDashboard() {
 
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          {socketRef.data.sensor === "open" ? (
+                          {socketRef.deviceStates[device.id]?.sensor === "open" ? (
                             <DoorOpen className="h-5 w-5 text-yellow-500" />
                           ) : (
                             <DoorClosed className="h-5 w-5" />
                           )}
                           <span className="font-medium capitalize text-sm">
-                            {socketRef.data.sensor === "open" ? "Door Open" : "Door Closed"}
+                            {socketRef.deviceStates[device.id]?.sensor === "open" ? "Door Open" : "Door Closed"}
                           </span>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          {socketRef.data.lock === "locked" ? (
+                          {socketRef.deviceStates[device.id]?.lock === "locked" ? (
                             <Lock className="h-5 w-5 text-red-500" />
                           ) : (
                             <Unlock className="h-5 w-5 text-green-500" />
                           )}
                           <span className="font-medium capitalize text-sm">
-                            {socketRef.data.lock === "locked" ? "Locked" : "Unlocked"}
+                            {socketRef.deviceStates[device.id]?.lock === "locked" ? "Locked" : "Unlocked"}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -296,13 +330,13 @@ export function DoorLockDashboard() {
                             id={`toggle-${device.id}`}
                             checked={!!lockStates[device.id]}
                             onCheckedChange={(e) => toggleDeviceLock(device.id, e)}
-                            disabled={!device.isOnline || lockChanging[device.id]}
+                            disabled={!socketRef.deviceStatuses[device.id] || lockChanging[device.id]}
                           />
                         </div>
                       </div>
 
                       {/* Schedule Info */}
-                      {device.schedules.length > 0 && (
+                      {device.schedules?.length > 0 && (
                         <div className="mt-3 p-2 rounded-lg bg-white/5 border border-white/10">
                           <div className="flex items-center gap-2 mb-1">
                             <Clock className="h-3 w-3 text-blue-500" />
@@ -316,15 +350,15 @@ export function DoorLockDashboard() {
                         </div>
                       )}
                       {/* Schedule Button */}
-                      <Button
+                      {/* <Button
                         onClick={() => openScheduleDialog(device.id)}
                         variant="outline"
                         className="w-full"
-                        disabled={!device.isOnline}
+                        disabled={!socketRef.deviceStatuses[device.id]}
                       >
                         <Calendar className="mr-2 h-4 w-4" />
-                        {device.schedules.length > 0 ? "Edit Schedule" : "Set Schedule"}
-                      </Button>
+                        {device.schedules?.length > 0 ? "Edit Schedule" : "Set Schedule"}
+                      </Button> */}
                     </CardContent>
                   </Card>
                 ))}
@@ -334,16 +368,16 @@ export function DoorLockDashboard() {
         </div>
       </SidebarInset>
 
-      <AddDeviceDialog open={showAddDevice} onOpenChange={setShowAddDevice} onAddDevice={addDevice} />
+      <AddDeviceDialog open={showAddDevice} onOpenChange={setShowAddDevice} />
 
-      <ScheduleDialog
+      {/* <ScheduleDialog
         open={showScheduleDialog}
         onOpenChange={setShowScheduleDialog}
         deviceId={selectedDeviceId}
-        devices={devices}
+        devices={data || []}
         onAddSchedule={addSchedule}
         onDeleteSchedule={deleteSchedule}
-      />
+      /> */}
     </>
   )
 }

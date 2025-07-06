@@ -10,9 +10,11 @@ interface DeviceState {
 export function useDeviceWebSocket() {
   const socketRef = useRef<Socket | null>(null)
 
-  const [data, setData] = useState<DeviceState>({ lock: "locked", sensor: "closed", buzzer: "off" })
+  type DeviceStateMap = Record<string, DeviceState>
+
+  const [deviceStates, setDeviceStates] = useState<DeviceStateMap>({})
+
   const [isConnected, setIsConnected] = useState(false)
-  const [buzzer, setBuzzer] = useState(false)
   const [deviceStatuses, setDeviceStatuses] = useState<Record<string, boolean>>({})
 
 
@@ -37,35 +39,42 @@ export function useDeviceWebSocket() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     socket.on("device_status", (data: any) => {
-      if ("buzzer" in data) {
-        // This is a DeviceState
-        const transformedData = data as DeviceState
+      // Device state update (includes lock/sensor/buzzer + deviceId)
+      if ("deviceId" in data && ("buzzer" in data || "lock" in data || "sensor" in data)) {
+        const { deviceId, ...rest } = data as { deviceId: string } & DeviceState
 
-        setBuzzer(transformedData.buzzer === "on")
-        setData(transformedData)
+        setDeviceStates(prev => ({
+          ...prev,
+          [deviceId]: rest,
+        }));
 
+        // Device online/offline event (presence update)
       } else if ("deviceName" in data && "online" in data) {
-        // This is an online status update
         setDeviceStatuses(prev => ({
           ...prev,
-          [data.deviceName]: data.online,
-        }))
+          [data.deviceId]: data.online,
+        }));
+
       } else {
-        console.warn("⚠️ Unrecognized device_status payload", data)
+        console.warn("⚠️ Unrecognized device_status payload", data);
       }
-    })
+    });
   }
 
-  const send = (msg: unknown) => {
+  const send = (deviceId: string, command: string) => {
     if (!socketRef.current) {
       console.error("❌ WebSocket is not connected")
       return
     }
 
+    const message = {
+      deviceId: deviceId,
+      command: command, // e.g., "lock" or "unlock"
+    }
+
     try {
-      // const json = JSON.stringify(msg)
-      socketRef.current.emit("command", msg)
-      console.log("📤 Sent command:", msg)
+      socketRef.current.emit("command", message)
+      console.log("📤 Sent command:", message)
     } catch (err) {
       console.error("⚠️ Failed to send command:", err)
     }
@@ -77,9 +86,8 @@ export function useDeviceWebSocket() {
 
   return {
     send,
-    data,
+    deviceStates,
     isConnected,
-    buzzer,
     deviceStatuses
   }
 }
