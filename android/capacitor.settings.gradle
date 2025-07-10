@@ -13,3 +13,6 @@ project(':capacitor-preferences').projectDir = new File('../node_modules/@capaci
 
 include ':capacitor-push-notifications'
 project(':capacitor-push-notifications').projectDir = new File('../node_modules/@capacitor/push-notifications/android')
+
+include ':falconeta-capacitor-wifi-connect'
+project(':falconeta-capacitor-wifi-connect').projectDir = new File('../node_modules/@falconeta/capacitor-wifi-connect/android')

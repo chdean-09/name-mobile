@@ -20,10 +20,6 @@ interface Schedule {
 interface Device {
   id: string
   name: string
-  ipAddress: string
-  status: "locked" | "unlocked"
-  isOnline: boolean
-  lastSeen: string
   schedules: Schedule[]
 }
 
@@ -172,7 +168,7 @@ export function ScheduleDialog({
           </div>
 
           {/* Current Schedules */}
-          {device && device.schedules.length > 0 && (
+          {device && device.schedules?.length > 0 && (
             <div className="space-y-2">
               <Label className="text-blue-200">Current Schedules</Label>
               <div className="space-y-2 max-h-32 overflow-y-auto">
