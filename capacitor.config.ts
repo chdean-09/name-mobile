@@ -5,7 +5,11 @@ const config: CapacitorConfig = {
   appName: 'N.A.M.E',
   webDir: 'out',
   server: {
+<<<<<<< HEAD
     "url": "http://192.168.1.20:3000",
+=======
+    "url": "http://10.10.10.100:3000",
+>>>>>>> main
     "cleartext": true
   },
   plugins: {
