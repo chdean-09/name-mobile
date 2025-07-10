@@ -22,9 +22,10 @@ interface AvailableDevice {
 interface AddDeviceDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  email: string
 }
 
-export function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
+export function AddDeviceDialog({ open, onOpenChange, email }: AddDeviceDialogProps) {
   const [isAdding, setIsAdding] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [availableDevices, setAvailableDevices] = useState<AvailableDevice[]>([])
@@ -101,7 +102,6 @@ export function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
               device: result.device, // store the whole device
             })
           }
-
         }
       )
 
@@ -151,7 +151,7 @@ export function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
         ssid: ssid,
         pass: password,
         deviceName: customName,
-        userToken: "abc123"
+        userEmail: email
       });
 
       const encoder = new TextEncoder();
