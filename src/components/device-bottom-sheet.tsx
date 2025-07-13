@@ -39,7 +39,7 @@ interface Device {
   status: "locked" | "unlocked"
   isOnline: boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  schedules: any[]
+  schedule: any[]
 }
 
 interface DeviceState {
@@ -62,6 +62,8 @@ interface DeviceBottomSheetProps {
   onToggleLock: (deviceId: string, newState: boolean) => void
   email: string
   onNavigateToSchedule?: (deviceId: string) => void
+  onWiFiConfig?: (deviceId: string, deviceName: string) => void
+  onEditDevice?: (deviceId: string, deviceName: string) => void
 }
 
 export function DeviceBottomSheet({
@@ -73,10 +75,10 @@ export function DeviceBottomSheet({
   onClose,
   onToggleLock,
   email,
-  onNavigateToSchedule
+  onNavigateToSchedule,
+  onWiFiConfig,
+  onEditDevice,
 }: DeviceBottomSheetProps) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editName, setEditName] = useState("")
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   const isLocked = deviceState?.lock === "locked"
@@ -85,17 +87,6 @@ export function DeviceBottomSheet({
   const isBuzzing = deviceState?.buzzer === "on"
   const signal = getWifiSignalStrength(deviceState?.rssi);
   const rssiPercent = rssiToPercent(deviceState?.rssi)
-
-
-  const handleEdit = () => {
-    setEditName(device?.name || "")
-    setIsEditing(true)
-  }
-
-  const handleSave = async () => {
-    // Implement save logic
-    setIsEditing(false)
-  }
 
   const handleDelete = async (deviceId: string) => {
     console.log("Deleting device:", deviceId)
@@ -247,17 +238,28 @@ export function DeviceBottomSheet({
                 {/* Device Stats */}
                 <div className="grid grid-cols-1 gap-4">
                   <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-blue-100 dark:bg-blue-900`}>
-                        <signal.icon className={`h-5 w-5 ${signal.color}`} />
+                    <div className="flex items-center gap-3 justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-blue-100 dark:bg-blue-900`}>
+                          <signal.icon className={`h-5 w-5 ${signal.color}`} />
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Signal</p>
+                          <p className={`font-semibold text-slate-900 dark:text-white ${signal.color}`}>
+                            {typeof deviceState?.rssi === "number" ? `${deviceState.rssi} dBm` : "N/A"}{" "}
+                            <span className="ml-1 text-xs">({signal.label})</span>
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Signal</p>
-                        <p className={`font-semibold text-slate-900 dark:text-white ${signal.color}`}>
-                          {typeof deviceState?.rssi === "number" ? `${deviceState.rssi} dBm` : "N/A"}{" "}
-                          <span className="ml-1 text-xs">({signal.label})</span>
-                        </p>
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full ml-2 bg-blue-100 dark:bg-blue-900 shadow-lg hover:bg-blue-200 dark:hover:bg-blue-700 transition"
+                        onClick={() => onWiFiConfig?.(deviceId!, device!.name)}
+                        aria-label="Configure WiFi"
+                      >
+                        <Settings className="h-6 w-6 text-blue-600 dark:text-blue-300" />
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -288,33 +290,7 @@ export function DeviceBottomSheet({
                     <Button
                       variant="outline"
                       className="w-full justify-start h-14 rounded-2xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                    >
-                      <History className="h-5 w-5 mr-3 text-purple-500" />
-                      <div className="text-left">
-                        <p className="font-medium">Activity Log</p>
-                        <p className="text-xs text-slate-500">View lock/unlock history</p>
-                      </div>
-                    </Button>
-                  </motion.div>
-
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start h-14 rounded-2xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                    >
-                      <Settings className="h-5 w-5 mr-3 text-slate-500" />
-                      <div className="text-left">
-                        <p className="font-medium">Device Settings</p>
-                        <p className="text-xs text-slate-500">Configure device options</p>
-                      </div>
-                    </Button>
-                  </motion.div>
-
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start h-14 rounded-2xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                      onClick={handleEdit}
+                      onClick={() => onEditDevice?.(deviceId!, device!.name)}
                     >
                       <Edit2 className="h-5 w-5 mr-3 text-orange-500" />
                       <div className="text-left">

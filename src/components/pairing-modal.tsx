@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "motion/react"
-import { X, Bluetooth, Wifi, Search, CheckCircle, Loader2, Smartphone, Lock, ArrowRight } from "lucide-react"
+import { X, Bluetooth, Wifi, Search, CheckCircle, Loader2, Smartphone, Lock, ArrowRight, EyeOff, Eye } from "lucide-react"
 import { BleClient, BleDevice } from '@capacitor-community/bluetooth-le';
 import { CapacitorWifiConnect } from "@falconeta/capacitor-wifi-connect";
 import { Button } from "@/components/ui/button"
@@ -36,11 +36,13 @@ export function PairingModal({ isOpen, onClose, onDeviceAdded, userEmail, device
   const [selectedDevice, setSelectedDevice] = useState<BluetoothDevice | null>(null)
   const [customName, setCustomName] = useState<string>("")
   const [wifiCredentials, setWifiCredentials] = useState({ ssid: "", password: "" })
+  const [showPassword, setShowPassword] = useState(false)
   const [isScanning, setIsScanning] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null)
   // const [ssid, setSSID] = useState<string | null>(null)
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [waitingForHeartbeat, setWaitingForHeartbeat] = useState(false);
 
   const deviceService = 'f92a1d0c-cd74-40b9-b7c1-806d8fe67c81';
@@ -58,7 +60,7 @@ export function PairingModal({ isOpen, onClose, onDeviceAdded, userEmail, device
     }
 
     getSSID();
-  })
+  }, [])
 
   useEffect(() => {
     if (!waitingForHeartbeat) return;
@@ -74,12 +76,22 @@ export function PairingModal({ isOpen, onClose, onDeviceAdded, userEmail, device
 
   useEffect(() => {
     const setupKeyboardListeners = async () => {
-      const showListener = await Keyboard.addListener('keyboardWillShow', () => setKeyboardOpen(true));
-      const hideListener = await Keyboard.addListener('keyboardWillHide', () => setKeyboardOpen(false));
-      // For Android, also listen to 'keyboardDidShow'/'keyboardDidHide'
-      const showListener2 = await Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
-      const hideListener2 = await Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
-
+      const showListener = await Keyboard.addListener('keyboardWillShow', (info) => {
+        setKeyboardOpen(true);
+        setKeyboardHeight(info.keyboardHeight || 300); // fallback if not provided
+      });
+      const hideListener = await Keyboard.addListener('keyboardWillHide', () => {
+        setKeyboardOpen(false);
+        setKeyboardHeight(0);
+      });
+      const showListener2 = await Keyboard.addListener('keyboardDidShow', (info) => {
+        setKeyboardOpen(true);
+        setKeyboardHeight(info.keyboardHeight || 300);
+      });
+      const hideListener2 = await Keyboard.addListener('keyboardDidHide', () => {
+        setKeyboardOpen(false);
+        setKeyboardHeight(0);
+      });
       return () => {
         showListener.remove();
         hideListener.remove();
@@ -352,7 +364,7 @@ export function PairingModal({ isOpen, onClose, onDeviceAdded, userEmail, device
                 </Label>
                 <Input
                   id="ssid"
-                  value={wifiCredentials.ssid}
+                  defaultValue={wifiCredentials.ssid}
                   onChange={(e) => setWifiCredentials((prev) => ({ ...prev, ssid: e.target.value }))}
                   placeholder="Enter Wi-Fi network name"
                   className="mt-1 rounded-2xl"
@@ -363,14 +375,29 @@ export function PairingModal({ isOpen, onClose, onDeviceAdded, userEmail, device
                 <Label htmlFor="password" className="text-sm font-medium">
                   Password
                 </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={wifiCredentials.password}
-                  onChange={(e) => setWifiCredentials((prev) => ({ ...prev, password: e.target.value }))}
-                  placeholder="Enter Wi-Fi password"
-                  className="mt-1 rounded-2xl"
-                />
+                <div className="relative mt-1">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={wifiCredentials.password}
+                    onChange={(e) => setWifiCredentials((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder="Enter Wi-Fi password"
+                    className="mt-1 rounded-2xl"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-slate-500" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-slate-500" />
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -501,7 +528,12 @@ export function PairingModal({ isOpen, onClose, onDeviceAdded, userEmail, device
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed inset-4 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl z-50 overflow-hidden"
+            className={`fixed inset-x-0 top-0 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl z-50 overflow-hidden flex flex-col`}
+            style={
+              keyboardOpen && keyboardHeight
+                ? { bottom: keyboardHeight, maxHeight: `calc(100vh - ${keyboardHeight}px)`, height: "auto", marginTop: "env(safe-area-inset-top)" }
+                : { bottom: 0, maxHeight: "calc(100vh - 0px)", height: "auto", marginTop: "env(safe-area-inset-top)" }
+            }
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
@@ -527,7 +559,7 @@ export function PairingModal({ isOpen, onClose, onDeviceAdded, userEmail, device
             </div>
 
             {/* Content */}
-            <div className={`p-6 overflow-y-auto h-[80vh] ${keyboardOpen ? "max-h-[40vh] overflow-y-auto" : ""}`}>{renderStep()}</div>
+            <div className={`p-6 overflow-y-auto flex-1 min-h-0`}>{renderStep()}</div>
 
             {/* Progress Indicator */}
             <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800">

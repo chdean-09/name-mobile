@@ -25,11 +25,8 @@ import {
   Sun,
   Volume2,
   Clock,
-  Edit2,
   Trash2,
   MoreVertical,
-  ToggleLeft,
-  ToggleRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -42,6 +39,8 @@ import { AddScheduleModal } from "@/components/add-schedule-modal"
 import { useTheme } from "next-themes"
 import Image from "next/image"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { WiFiConfigModal } from "./wifi-config-modal"
+import { EditDeviceModal } from "./edit-device-modal"
 
 interface Schedule {
   id: string
@@ -57,7 +56,7 @@ interface Device {
   name: string
   status: "locked" | "unlocked"
   isOnline: boolean
-  schedules: Schedule[]
+  schedule: Schedule[]
 }
 
 export interface Heartbeat {
@@ -70,7 +69,7 @@ export interface Heartbeat {
   rssi: number
 }
 
-type ViewType = "dashboard" | "settings" | "device-detail" | "schedule"
+type ViewType = "dashboard" | "settings" | "schedule"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -94,7 +93,7 @@ export default function SmartLockApp() {
 
   // Connection state
   const [isConnected, setIsConnected] = useState(false)
-  const [transport, setTransport] = useState("N/A")
+  // const [transport, setTransport] = useState("N/A")
   const [deviceStates, setDeviceStates] = useState<Record<string, Heartbeat>>({})
   const [joinedRooms, setJoinedRooms] = useState(new Set())
 
@@ -103,9 +102,13 @@ export default function SmartLockApp() {
   const [showPairing, setShowPairing] = useState(false)
   const [showAddSchedule, setShowAddSchedule] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null)
+  const [showWiFiConfig, setShowWiFiConfig] = useState(false)
+  const [wifiConfigDevice, setWiFiConfigDevice] = useState<{ id: string; name: string } | null>(null)
+  const [showEditDevice, setShowEditDevice] = useState(false)
+  const [editingDevice, setEditingDevice] = useState<{ id: string; name: string } | null>(null)
 
   // Schedule state
-  const [schedules, setSchedules] = useState<Schedule[]>([])
+  // const [schedules, setSchedules] = useState<Schedule[]>([])
 
   const handleDeviceStatus = useCallback((data: Heartbeat) => {
     console.log("Received heartbeat payload:", JSON.stringify(data))
@@ -130,16 +133,16 @@ export default function SmartLockApp() {
 
     function onConnect() {
       setIsConnected(true)
-      setTransport(socket.io.engine.transport.name)
+      // setTransport(socket.io.engine.transport.name)
 
-      socket.io.engine.on("upgrade", (transport) => {
-        setTransport(transport.name)
-      })
+      // socket.io.engine.on("upgrade", (transport) => {
+      //   setTransport(transport.name)
+      // })
     }
 
     function onDisconnect() {
       setIsConnected(false)
-      setTransport("N/A")
+      // setTransport("N/A")
       setJoinedRooms(new Set())
     }
 
@@ -170,37 +173,14 @@ export default function SmartLockApp() {
   }, [isConnected, isLoading, error, devices, joinedRooms])
 
   // Load schedules for selected device
-  useEffect(() => {
-    if (selectedDeviceId && currentView === "schedule") {
-      // Mock schedules - replace with actual API call
-      setSchedules([
-        {
-          id: "1",
-          type: "lock",
-          time: "21:00",
-          days: ["Mon", "Wed", "Fri"],
-          isEnabled: true,
-          deviceId: selectedDeviceId,
-        },
-        {
-          id: "2",
-          type: "lock",
-          time: "20:00",
-          days: ["Sat", "Sun"],
-          isEnabled: true,
-          deviceId: selectedDeviceId,
-        },
-        {
-          id: "3",
-          type: "unlock",
-          time: "08:00",
-          days: ["Tue", "Thu", "Sat"],
-          isEnabled: false,
-          deviceId: selectedDeviceId,
-        },
-      ])
-    }
-  }, [selectedDeviceId, currentView])
+  // useEffect(() => {
+  //   console.log("Selected Device ID:", selectedDeviceId)
+  //   if (selectedDeviceId && currentView === "schedule" && devices) {
+
+  //     console.log("Selected Device Schedules:", devices.find((d) => d.id === selectedDeviceId)?.schedule)
+  //     setSchedules(devices.find((d) => d.id === selectedDeviceId)?.schedule || [])
+  //   }
+  // }, [selectedDeviceId, currentView, devices])
 
   const toggleDeviceLock = (deviceId: string, newState: boolean) => {
     const message = {
@@ -219,7 +199,7 @@ export default function SmartLockApp() {
 
   const goBack = () => {
     setNavDirection("backward")
-    if (currentView === "schedule" || currentView === "device-detail") {
+    if (currentView === "schedule") {
       setCurrentView("dashboard")
     } else if (currentView === "settings") {
       setCurrentView("dashboard")
@@ -232,40 +212,55 @@ export default function SmartLockApp() {
   }
 
   // Schedule functions
-  const toggleSchedule = (scheduleId: string) => {
+  const toggleSchedule = async (scheduleId: string) => {
     if (navigator.vibrate) {
       navigator.vibrate(50)
     }
-    setSchedules((prev) =>
-      prev.map((schedule) => (schedule.id === scheduleId ? { ...schedule, isEnabled: !schedule.isEnabled } : schedule)),
-    )
+
+    const schedule = devices?.find((d) => d.id === selectedDeviceId)?.schedule.find((s) => s.id === scheduleId)
+    await fetch(`https://name-server-production.up.railway.app/schedule/${scheduleId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ isEnabled: !schedule?.isEnabled }),
+    })
   }
 
-  const deleteSchedule = (scheduleId: string) => {
-    setSchedules((prev) => prev.filter((schedule) => schedule.id !== scheduleId))
+  const deleteSchedule = async (scheduleId: string) => {
+    await fetch(`https://name-server-production.up.railway.app/schedule/${scheduleId}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
   }
 
-  const editSchedule = (schedule: Schedule) => {
-    setEditingSchedule(schedule)
-    setShowAddSchedule(true)
+  const addSchedule = async (newSchedule: Omit<Schedule, "id" | "deviceId">) => {
+    await fetch("https://name-server-production.up.railway.app/schedule", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        deviceId: selectedDeviceId,
+        schedule: {
+          days: newSchedule.days,
+          time: newSchedule.time,
+          type: newSchedule.type === "lock" ? "LOCK" : "UNLOCK",
+        }
+      }),
+    })
+    console.log("Adding schedule:", JSON.stringify(newSchedule), "for device:", selectedDeviceId)
   }
 
-  const addSchedule = (newSchedule: Omit<Schedule, "id" | "deviceId">) => {
-    const schedule: Schedule = {
-      ...newSchedule,
-      id: Date.now().toString(),
-      deviceId: selectedDeviceId!,
-    }
-    setSchedules((prev) => [...prev, schedule])
-  }
-
-  const updateSchedule = (updatedSchedule: Omit<Schedule, "deviceId">) => {
-    setSchedules((prev) =>
-      prev.map((schedule) =>
-        schedule.id === updatedSchedule.id ? { ...updatedSchedule, deviceId: selectedDeviceId! } : schedule,
-      ),
-    )
-  }
+  // const updateSchedule = (updatedSchedule: Omit<Schedule, "deviceId">) => {
+  //   setSchedules((prev) =>
+  //     prev.map((schedule) =>
+  //       schedule.id === updatedSchedule.id ? { ...updatedSchedule, deviceId: selectedDeviceId! } : schedule,
+  //     ),
+  //   )
+  // }
 
   const formatDays = (days: string[]) => {
     if (days.length === 7) return "Every day"
@@ -333,8 +328,6 @@ export default function SmartLockApp() {
       switch (currentView) {
         case "settings":
           return "Settings"
-        case "device-detail":
-          return devices?.find((d) => d.id === selectedDeviceId)?.name || "Device"
         case "schedule":
           return "Schedule"
         default:
@@ -455,7 +448,7 @@ export default function SmartLockApp() {
               <Image src={"/logo-only.png"} alt={"Logo"} className="size-full" width={300} height={300} />
             </motion.div>
 
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Welcome to NAME SmartLock</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Welcome to N.A.M.E</h2>
             <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-sm">
               Secure your home with intelligent door locks. Add your first device to get started.
             </p>
@@ -617,16 +610,6 @@ export default function SmartLockApp() {
           <motion.div
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            whileInView={{
-              boxShadow: [
-                "0 10px 25px rgba(59, 130, 246, 0.3)",
-                "0 15px 35px rgba(59, 130, 246, 0.4)",
-                "0 10px 25px rgba(59, 130, 246, 0.3)",
-              ],
-            }}
-            transition={{
-              boxShadow: { duration: 2, repeat: Number.POSITIVE_INFINITY },
-            }}
           >
             <Button
               onClick={() => setShowPairing(true)}
@@ -832,13 +815,17 @@ export default function SmartLockApp() {
   }
 
   const renderSchedule = () => {
+    const schedules = devices?.find((d) => d.id === selectedDeviceId)?.schedule || []
+
     const groupedSchedules = schedules.reduce(
       (acc, schedule) => {
-        acc[schedule.type].push(schedule)
-        return acc
+        const type = schedule.type.toLowerCase();
+        if (!acc[type]) acc[type] = [];
+        acc[type].push(schedule);
+        return acc;
       },
-      { lock: [] as Schedule[], unlock: [] as Schedule[] },
-    )
+      { lock: [] as Schedule[], unlock: [] as Schedule[] } as Record<string, Schedule[]>,
+    );
 
     return (
       <motion.div
@@ -932,11 +919,6 @@ export default function SmartLockApp() {
                                 <span className="text-2xl font-bold text-slate-900 dark:text-white">
                                   {formatTime(schedule.time)}
                                 </span>
-                                {schedule.isEnabled ? (
-                                  <ToggleRight className="h-5 w-5 text-green-500" />
-                                ) : (
-                                  <ToggleLeft className="h-5 w-5 text-slate-400" />
-                                )}
                               </div>
                               <p className="text-sm text-slate-600 dark:text-slate-400">{formatDays(schedule.days)}</p>
                             </div>
@@ -958,10 +940,6 @@ export default function SmartLockApp() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="rounded-2xl">
-                                <DropdownMenuItem onClick={() => editSchedule(schedule)} className="rounded-xl">
-                                  <Edit2 className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => deleteSchedule(schedule.id)}
                                   className="text-red-600 rounded-xl"
@@ -1026,11 +1004,6 @@ export default function SmartLockApp() {
                                 <span className="text-2xl font-bold text-slate-900 dark:text-white">
                                   {formatTime(schedule.time)}
                                 </span>
-                                {schedule.isEnabled ? (
-                                  <ToggleRight className="h-5 w-5 text-green-500" />
-                                ) : (
-                                  <ToggleLeft className="h-5 w-5 text-slate-400" />
-                                )}
                               </div>
                               <p className="text-sm text-slate-600 dark:text-slate-400">{formatDays(schedule.days)}</p>
                             </div>
@@ -1052,10 +1025,6 @@ export default function SmartLockApp() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="rounded-2xl">
-                                <DropdownMenuItem onClick={() => editSchedule(schedule)} className="rounded-xl">
-                                  <Edit2 className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => deleteSchedule(schedule.id)}
                                   className="text-red-600 rounded-xl"
@@ -1092,10 +1061,33 @@ export default function SmartLockApp() {
     }
   }
 
+  const handleWiFiConfig = (deviceId: string, deviceName: string) => {
+    setWiFiConfigDevice({ id: deviceId, name: deviceName })
+    setShowWiFiConfig(true)
+  }
+
+  const handleEditDevice = (deviceId: string, deviceName: string) => {
+    setEditingDevice({ id: deviceId, name: deviceName })
+    setShowEditDevice(true)
+  }
+
+  const handleDeviceNameSaved = async (newName: string) => {
+    await fetch(`https://name-server-production.up.railway.app/device-list/${editingDevice?.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        newName: newName,
+        userEmail: email
+      }),
+    })
+  }
+
   return (
     <div className="h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex flex-col">
       {/* Status Bar Spacer */}
-      <div className="h-6 bg-transparent flex-shrink-0" />
+      <div className="h-6 bg-slate-900/80 flex-shrink-0" />
 
       {/* Fixed Header */}
       {renderHeader()}
@@ -1119,6 +1111,8 @@ export default function SmartLockApp() {
           setSelectedDevice(null)
           navigateTo("schedule", deviceId)
         }}
+        onWiFiConfig={handleWiFiConfig}
+        onEditDevice={handleEditDevice}
       />
 
       {/* Pairing Modal */}
@@ -1142,7 +1136,7 @@ export default function SmartLockApp() {
         }}
         onSave={(schedule) => {
           if (editingSchedule) {
-            updateSchedule({ ...schedule, id: editingSchedule.id })
+            // updateSchedule({ ...schedule, id: editingSchedule.id })
           } else {
             addSchedule(schedule)
           }
@@ -1150,6 +1144,34 @@ export default function SmartLockApp() {
           setEditingSchedule(null)
         }}
         editingSchedule={editingSchedule}
+      />
+
+      {/* WiFi Configuration Modal */}
+      <WiFiConfigModal
+        isOpen={showWiFiConfig}
+        onClose={() => {
+          setShowWiFiConfig(false)
+          setWiFiConfigDevice(null)
+        }}
+        email={email}
+        deviceName={wifiConfigDevice?.name || ""}
+        onConfigSent={() => {
+          setShowWiFiConfig(false)
+          setWiFiConfigDevice(null)
+        }}
+        deviceStates={deviceStates}
+      />
+
+      {/* Edit Device Modal */}
+      <EditDeviceModal
+        isOpen={showEditDevice}
+        onClose={() => {
+          setShowEditDevice(false)
+          setEditingDevice(null)
+        }}
+        deviceId={editingDevice?.id || ""}
+        currentName={editingDevice?.name || ""}
+        onSave={handleDeviceNameSaved}
       />
     </div>
   )
