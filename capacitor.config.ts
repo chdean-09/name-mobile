@@ -5,11 +5,11 @@ const config: CapacitorConfig = {
   appId: 'com.name.smartlock',
   appName: 'N.A.M.E',
   webDir: 'out',
-  server: {
-    "url": "http://192.168.1.20:3000",
-    // "url":"http://192.168.209.243:3000",
-    "cleartext": true
-  },
+  // server: {
+  //   "url": "http://192.168.1.20:3000",
+  //   // "url":"http://192.168.209.243:3000",
+  //   "cleartext": true
+  // },
   plugins: {
     SafeArea: {
       enabled: false,
