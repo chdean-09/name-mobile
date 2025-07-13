@@ -122,15 +122,15 @@ export function AddDeviceDialog({ open, onOpenChange, email }: AddDeviceDialogPr
       await sendCredentialsOverBLE(availableDevice.device)
       console.log("Sending credentials over BLE...", data.name, data.password, ssid)
 
-      await fetch("https://name-server-production.up.railway.app/api/device-list", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          name: data.name,
-        })
-      })
+      // await fetch("https://name-server-production.up.railway.app/api/device-list", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json"
+      //   },
+      //   body: JSON.stringify({
+      //     name: data.name,
+      //   })
+      // })
 
       onOpenChange(false)
     } catch (error) {
